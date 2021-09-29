@@ -1,7 +1,7 @@
 # SARS-CoV-2 co-infections
 
 ## Software
-The whole pipeline is runned using Docker and a basic Python instalation, there is no need to install nothing else.
+The whole pipeline runs using Docker and a basic Python installation, there is no need to install nothing else.
 
 ## Steps
 
@@ -9,32 +9,21 @@ The whole pipeline is runned using Docker and a basic Python instalation, there 
 # download required files
 python minority_analysis.py download
 
-# get combined vcf
-python minority_analysis.py bam2vcf --bams_folder ./coinfection > combined.vcf
-# created the file  
+# get vcf files from BAM files
+python minority_analysis.py bam2vcf --bams_folder ./coinfection -o ./vcfs
+ 
+# merge variants
+python minority_analysis.py merge_vcfs --vcfs_dir ./vcfs -o ./results/combined.vcf
 
 # process minority variants
-python minority_analysis.py bam2vcf --vcf combined.vcf
+mkdir results
+python minority_analysis.py vcf2minconsensus --vcf ./results/combined.vcf --out ./results/variants.json 
 
-
+# comparative analysis
+python minority_analysis.py report --data ./results/variants.json --out_dir ./results/
 ```
-
-
  
-## Example
-
-
-
-
-
-
-
-## Anex
-### How to get the mapping
-There are many ways to build the bam file
-
-
-### Used programs
+# Used Programs
 
 * GATK 4.1.8.0
 * BCFtools
