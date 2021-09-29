@@ -1,6 +1,11 @@
 # SARS-CoV-2 co-infections
 
 ## Software
+
+conda create --name covid19 python=3.8
+conda activate covid19
+conda install -c conda-forge biopython pandas matplotlib numpy seaborn
+
 The whole pipeline runs using Docker and a basic Python installation, there is no need to install nothing else.
 
 ## Steps
