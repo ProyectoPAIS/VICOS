@@ -377,8 +377,8 @@ if __name__ == '__main__':
     cmd.add_argument('-o', '--output_folder', default="./data")
     cmd.add_argument('-v', '--verbose', action='store_true')
 
-    cmd = subparsers.add_parser('bams2vcfs', help='calls haplotype caller for each bam sample')
-    cmd.add_argument('-bams', '--bamfiles_dir', required=True, help="directory were bam files are located")
+    cmd = subparsers.add_parser('bam2vcf', help='calls haplotype caller for each bam sample')
+    cmd.add_argument('-bams', '--bams_folder', required=True, help="directory were bam files are located")
     cmd.add_argument('-ref', '--reference', default="data/MN996528.fna",
                      help='fasta file. Can be gziped. Default "data/MN996528.fna"')
     cmd.add_argument('-o', '--output', default="results/", help="output dir. Default resutls/")
@@ -428,10 +428,10 @@ if __name__ == '__main__':
     if args.command == 'download':
         download(args)
 
-    if args.command == 'bams2vcfs':
+    if args.command == 'bam2vcf':
 
-        if not os.path.exists(args.reference_fasta):
-            sys.stderr.write(f"'{args.reference_fasta}' does not exists")
+        if not os.path.exists(args.reference):
+            sys.stderr.write(f"'{args.reference}' does not exists")
             sys.exit(1)
 
         outfolder = args.output
@@ -441,11 +441,12 @@ if __name__ == '__main__':
             sys.stderr.write(f"'{outfolder}' could not be created")
             sys.exit(1)
 
-        for bam_file in glob(args.bamfiles_dir + "/*.bam"):
+        for bam_file in glob(args.bams_folder  + "/*.bam"):
             sample = bam_file.split("/")[-1].split(".bam")[0]
-            f"""/gatk/gatk  HaplotypeCaller -ERC GVCF -R {args.reference_fasta} \
-                -ploidy 2 -I {bam_file} --output-mode EMIT_ALL_SITES -O {args.output}/{sample}.g.vcf.gz"""
-            sp.run(cmd, shell=True)
+            e(f"samtools index  {bam_file}")
+            cmd = f"""/gatk/gatk  HaplotypeCaller -ERC GVCF -R {args.reference} \
+                -ploidy 2 -I {bam_file} --output-mode EMIT_ALL_CONFIDENT_SITES -O {args.output}/{sample}.g.vcf.gz"""
+            e(cmd)
 
     if args.command == 'merge_vcfs':
         merge_vcfs(args)
