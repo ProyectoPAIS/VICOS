@@ -1,7 +1,8 @@
+#!/usr/bin/env python3
+
 import os
 import sys
 import json
-import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -10,6 +11,12 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 
 from itertools import groupby
+
+
+def e(cmd):
+    if os.environ.get("verbose"):
+        print(cmd)
+    sp.run(cmd, shell=True)
 
 
 def merge_vcfs(args):
@@ -29,16 +36,16 @@ def merge_vcfs(args):
     if not vcf_files:
         raise FileNotFoundError(f'no .vcf or .vcf.gz files where found at {args.vcfs_dir}')
     vcfs = " ".join([f"--variant {x}" for x in vcf_files])
-    cmdx = f"""docker run -u $(id -u ${{USER}}):$(id -g ${{USER}})  -v $PWD:/out -w /out broadinstitute/gatk:4.2.2.0 \
-                gatk CombineGVCFs -R {args.reference} {vcfs} -O {args.output}.raw"""
-    sp.run(cmdx, shell=True)
-    cmdx = f"""docker run -u $(id -u ${{USER}}):$(id -g ${{USER}})  -v $PWD:/out -w /out broadinstitute/gatk:4.2.2.0 \
-                    gatk GenotypeGVCFs \
+    # docker run -u $(id -u ${{USER}}):$(id -g ${{USER}})  -v $PWD:/out -w /out broadinstitute/gatk:4.2.2.0 \
+    cmdx = f"""/gatk/gatk CombineGVCFs -R {args.reference} {vcfs} -O {args.output}.raw"""
+    e(cmdx)
+    # docker run -u $(id -u ${{USER}}):$(id -g ${{USER}})  -v $PWD:/out -w /out broadinstitute/gatk:4.2.2.0 \
+    cmdx = f"""/gatk/gatk GenotypeGVCFs \
                     -R "{args.reference}" -ploidy 2 \
                     -V "{args.output}.raw" \
                     -O "{args.output}" 
         """
-    sp.run(cmdx, shell=True)
+    e(cmdx)
 
 
 def download(args):
@@ -50,21 +57,28 @@ def download(args):
         sys.exit(1)
     cmdx = f'wget -O {outfolder}/MN996528.fna "https://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?tool=portal&save=file&log$=seqview&db=nuccore&report=fasta&id=1802633808&conwithfeat=on&withparts=on&hide-cdd=on"'
     sp.run(cmdx, shell=True)
-    cmdx = f"""docker run -u $(id -u ${{USER}}):$(id -g ${{USER}}) -v $PWD:/out -w /out staphb/samtools \
-                    samtools dict -o {outfolder}/MN996528.dict {outfolder}/MN996528.fna"""
+    # docker run -u $(id -u ${{USER}}):$(id -g ${{USER}}) -v $DIND:/out -w /out staphb/samtools \
+    cmdx = f"""samtools dict -o {outfolder}/MN996528.dict {outfolder}/MN996528.fna"""
     # makeblastdb -dbtype nucl -in /ref/MN996528.fna && bwa index MN996528.fna && samtools faidx MN996528.fna
-    sp.run(cmdx, shell=True)
-    cmdx = f"""docker run -u $(id -u ${{USER}}):$(id -g ${{USER}}) -v $PWD:/out -w /out staphb/samtools \
-                samtools faidx {outfolder}/MN996528.fna"""
-    sp.run(cmdx, shell=True)
+    e(cmdx)
+    # docker run -u $(id -u ${{USER}}):$(id -g ${{USER}}) -v $DIND:/out -w /out staphb/samtools \
+    cmdx = f"""samtools faidx {outfolder}/MN996528.fna"""
+    e(cmdx)
 
 
-def vcf2minconsensus(args):
+def variant_filter(args):
     """MN996528.1	1879	.	A	G	14552.79	.	AC=2;AF=5.556e-03;AN=360;BaseQRankSum=2.16;DP=113297;ExcessHet=0.0061;FS=0.838;InbreedingCoeff=0.8880;MLEAC=2;MLEAF=5.556e-03;MQ=59.99;MQRankSum=0.00;QD=28.76;ReadPosRankSum=1.03;SOR=0.597	GT:AD:DP:GQ:PGT:PID:PL:PS	0/0:717,0:717:99:.:.:0,120,1800	0/0:166,0:166:99:.:.:0,120,1800	0/0:395,0:395:99:.:.:0,120,1800	0/0:354,0:354:99:.:.:0,120,1800	0/0:464,0:464:99:.:.:0,120,1800	0/0:363,0:363:99:.:.:0,120,1800	0/0:464,0:464:99:.:.:0,120,1800	0/0:396,0:396:99:.:.:0,120,1800	0/0:288,0:288:99:.:.:0,120,1800	0/0:371,0:371:99:.:.:0,120,1800	0/0:347,0:347:99:.:.:0,120,1800	0/0:422,0:422:99:.:.:0,120,1800	0/0:517,0:517:99:.:.:0,120,1800	0/0:392,0:392:99:.:.:0,120,1800	0/0:392,0:392:99:.:.:0,120,1800	0/0:465,0:465:99:.:.:0,120,1800
         """
     if not os.path.exists(args.vcf):
         sys.stderr.write(f"'{args.vcf}' does not exists\n")
         sys.exit(1)
+    print(f"Running lowfreq variant detection with:")
+    print(f'Minimun allele read depth: {args.min_allele_depth}')
+    print(f'max %N to discard a position: {args.min_coverage}')
+    print(f'minimun minority variant frequence: {args.min_freq}')
+    print(f'minimum minority variant frequency: {args.outlayers_cutoff}')
+
+    print("----------------")
     h = gzip.open(args.vcf, "rt") if args.vcf.endswith(".gz") else open(args.vcf)
     number_of_variable_sites = 0
     number_of_mutations = 0
@@ -110,15 +124,19 @@ def vcf2minconsensus(args):
                     dp = int(vec[9 + idx].split(":")[dp_index])
 
                     ad = vec[9 + idx].split(":")[ad_index]
-                    gt_vec = [int(x) if x != "." else 99 for x in gt.replace("|", "/").split("/")]
-                    pos_data[sample] = [{gt_options[gt_num]:
-                                             ([int(x) for x in ad.split(",")[gt_num]] if gt_num != 99 and (
-                                                     dp > args.min_depth) else "?")
-                                         for gt_num in gt_vec},
-                                        {gt_options[i]: int(ad_num) for i, ad_num in enumerate(ad.split(","))}]
 
-                    if len(set(gt.replace("|", "/").split("/"))) > 1:
-                        low_freq = True
+                    ads = [int(x) for x in ad.split(",") if x != "."]
+                    if ads:
+                        min_ad = min(ads)
+                        gt_vec = [int(x) if x != "." else 99 for x in gt.replace("|", "/").split("/")]
+                        pos_data[sample] = [{gt_options[gt_num]:
+                                                 ([int(x) for x in ad.split(",")[gt_num]] if gt_num != 99 and (
+                                                         min_ad > args.min_allele_depth) else "?")
+                                             for gt_num in gt_vec},
+                                            {gt_options[i]: int(ad_num) for i, ad_num in enumerate(ad.split(","))}]
+
+                        if ads and min_ad > args.min_allele_depth and len(set(gt.replace("|", "/").split("/"))) > 1:
+                            low_freq = True
                 if low_freq:
                     variants[pos] = pos_data
 
@@ -167,7 +185,7 @@ def vcf2minconsensus(args):
                     min_variant = freqs[0]
                     dp = sum(ads.values())
                     if min_variant[1] >= args.min_freq:
-                        if (dp > args.min_depth):
+                        if (dp > args.min_allele_depth):
                             min_freqs.append(min_variant[1])
                             consensus_variant = freqs[-1]
                             consensus_freqs.append(min_variant[1])
@@ -296,7 +314,7 @@ def comparative_analysis(json_file, output_dir):
     plt.ylabel("Min variant count")
     plt.ylabel("Samples count")
 
-    sns.histplot(data=df, x="count")
+    plt.hist(data=df, x="count")
     plt.savefig(f'{output_dir}/distplot.png')
 
     dfs = {}
@@ -339,6 +357,10 @@ def comparative_analysis(json_file, output_dir):
     for sample_name, df in dfs.items():
         df.to_csv(f'{output_dir}/{sample_name}.csv', index=False)
 
+    print(f"Report Complete: {len(dfs)} candidate/s were processed")
+
+    return candidates
+
 
 if __name__ == '__main__':
     import argparse
@@ -346,7 +368,6 @@ if __name__ == '__main__':
     from glob import glob
     import gzip
     from collections import defaultdict
-    import json
 
     parser = argparse.ArgumentParser(description='Process minory variants')
 
@@ -354,12 +375,14 @@ if __name__ == '__main__':
 
     cmd = subparsers.add_parser('download', help='Downloads reference and sample data')
     cmd.add_argument('-o', '--output_folder', default="./data")
+    cmd.add_argument('-v', '--verbose', action='store_true')
 
     cmd = subparsers.add_parser('bams2vcfs', help='calls haplotype caller for each bam sample')
     cmd.add_argument('-bams', '--bamfiles_dir', required=True, help="directory were bam files are located")
     cmd.add_argument('-ref', '--reference', default="data/MN996528.fna",
                      help='fasta file. Can be gziped. Default "data/MN996528.fna"')
     cmd.add_argument('-o', '--output', default="results/", help="output dir. Default resutls/")
+    cmd.add_argument('-v', '--verbose', action='store_true')
 
     cmd = subparsers.add_parser('merge_vcfs', help='joins all haplotype calls in one gvcf')
     cmd.add_argument('-vcfs', '--vcfs_dir', required=True, help="directory were bam files are located")
@@ -367,10 +390,11 @@ if __name__ == '__main__':
                      help='fasta file. Can be gziped. Default "data/MN996528.fna"')
     cmd.add_argument('-o', '--output',
                      default='results/variants.vcf.gz', help='output file. Default "results/variants.vcf.gz"')
+    cmd.add_argument('-v', '--verbose', action='store_true')
 
-    cmd = subparsers.add_parser('vcf2minconsensus', help='genotyping for multi sample')
-    cmd.add_argument('-md', '--min_depth', default=10, type=int,
-                     help='Minimun read depth. Default 10')
+    cmd = subparsers.add_parser('minor_freq_vars', help='gets a list of minor freq variants')
+    cmd.add_argument('-mad', '--min_allele_depth', default=10, type=int,
+                     help='Minimun allele read depth. Default 10')
     cmd.add_argument('-mc', '--min_coverage', default=0.8, type=float,
                      help='max %N to discard a position. Between 0.0-1.0 Default 0.8')
     cmd.add_argument('-mf', '--min_freq', default=0.2, type=float,
@@ -379,13 +403,28 @@ if __name__ == '__main__':
                      help='minimum minority variant frequency. Between 0.0-1.0 Default 0.8')
     cmd.add_argument('--vcf', required=True, help="Multi Sample VCF. GT and AD fields are mandatory")
     cmd.add_argument('--out', default="results/data.json", help="Output data")
+    cmd.add_argument('-v', '--verbose', action='store_true')
 
     cmd = subparsers.add_parser('report', help='comparative analysis between samples')
     cmd.add_argument('--data', required=True,
-                     help='JSON file created by vcf2minconsensus')
+                     help='JSON file created by "minor_freq_vars"')
     cmd.add_argument('--out_dir', default="./results")
+    cmd.add_argument('-v', '--verbose', action='store_true')
+
+    cmd = subparsers.add_parser('minconsensus', help='creates sequences using minor frequency variants')
+    cmd.add_argument('--data', required=True,
+                     help='JSON file created by minor_freq_vars')
+    cmd.add_argument('--vcf', required=True, help="Multi Sample VCF. GT and AD fields are mandatory")
+    cmd.add_argument('--out_dir', default="./results")
+    cmd.add_argument('-ref', '--reference', default="data/MN996528.fna",
+                     help='fasta file. Can be gziped. Default "data/MN996528.fna"')
+    cmd.add_argument('-v', '--verbose', action='store_true')
 
     args = parser.parse_args()
+
+    if args.verbose:
+        os.environ["verbose"] = "y"
+
     if args.command == 'download':
         download(args)
 
@@ -404,19 +443,21 @@ if __name__ == '__main__':
 
         for bam_file in glob(args.bamfiles_dir + "/*.bam"):
             sample = bam_file.split("/")[-1].split(".bam")[0]
-            f"""docker run -u $(id -u ${{USER}}):$(id -g ${{USER}})  -v $PWD:/out -w /out broadinstitute/gatk:4.2.2.0 \
-                java -jar /gatk/gatk-package-4.2.2.0-local.jar  HaplotypeCaller -ERC GVCF -R {args.reference_fasta} \
+            f"""/gatk/gatk  HaplotypeCaller -ERC GVCF -R {args.reference_fasta} \
                 -ploidy 2 -I {bam_file} --output-mode EMIT_ALL_SITES -O {args.output}/{sample}.g.vcf.gz"""
             sp.run(cmd, shell=True)
 
     if args.command == 'merge_vcfs':
         merge_vcfs(args)
 
-    if args.command == 'vcf2minconsensus':
-        vcf2minconsensus(args)
-        # --sequences_dir ./results/sequences/
-        # with open(args.vcf, "w") as h, open("./min_seqs.fasta", "w") as output:
-        #     aln(h, output, refseq=str(bpio.read("/data/MN996528.fna").seq), included_samples=None)
+    if args.command == 'minor_freq_vars':
+        variant_filter(args)
 
     if args.command == 'report':
-        comparative_analysis(args.data, args.out_dir)
+        candidates = comparative_analysis(args.data, args.out_dir)
+        # --sequences_dir ./results/sequences/
+
+    if args.command == 'minconsensus':
+        with open("data/combined.vcf") as h, open("./min_seqs.fasta", "w") as output:
+            aln(h, output, refseq=str(bpio.read("data/MN996528.fna", "fasta").seq),
+                included_samples=candidates)
