@@ -72,11 +72,11 @@ def variant_filter(args):
     if not os.path.exists(args.vcf):
         sys.stderr.write(f"'{args.vcf}' does not exists\n")
         sys.exit(1)
+
     print(f"Running lowfreq variant detection with:")
-    print(f'Minimun allele read depth: {args.min_allele_depth}')
-    print(f'max %N to discard a position: {args.min_coverage}')
-    print(f'minimun minority variant frequence: {args.min_freq}')
-    print(f'minimum minority variant frequency: {args.outlayers_cutoff}')
+    print(f'- Minimun allele read depth: {args.min_allele_depth}')
+    print(f'- max %N to discard a position: {args.min_coverage}')
+    print(f'- minimun minority variant frequency: {args.min_freq}')
 
     print("----------------")
     h = gzip.open(args.vcf, "rt") if args.vcf.endswith(".gz") else open(args.vcf)
@@ -144,8 +144,8 @@ def variant_filter(args):
         h.close()
     variants = dict(variants)
 
-    print(f'number_of_variable_sites: {number_of_variable_sites}')
-    print(f'number_of_mutations: {number_of_mutations}')
+    print(f'number of variable sites: {number_of_variable_sites}')
+    print(f'number of mutations: {number_of_mutations}')
 
     excluded_positions = []
     low_freq_freq = []
@@ -208,10 +208,7 @@ def variant_filter(args):
                 entries_data[pos] = entries
                 for k, v in variant_samples_pos.items():
                     variant_samples[k] = v
-            if pos == 8356:
-                print(entries)
-                print(samples_variants)
-                print(valid_min_variant)
+
     print(f'low freq positions:{len(entries_data)}')
     print(f'low freq mutations:{len(variant_samples)}')
 
@@ -282,7 +279,7 @@ def aln(h, output, refseq=None, included_samples=None):
         h.close()
 
 
-def comparative_analysis(json_file, output_dir):
+def comparative_analysis(json_file, output_dir,deviation_lowfreq=2, min_lowfreq=None):
     assert os.path.exists(json_file), f'"{json_file}" does not exists'
     with open(json_file) as h:
         data = json.load(h)
@@ -305,12 +302,16 @@ def comparative_analysis(json_file, output_dir):
     min_per_sample = dict(min_per_sample)
 
     df = pd.DataFrame([{"sample": k, "count": len(v)} for k, v in min_per_sample.items()])
-    median = np.mean(df["count"])
-    deviation = np.std(df["count"])
-    cutoff = median + 2 * np.sqrt(deviation)
-    plt.axvline(cutoff, 0, max(df["count"]), color="red")
+
+    if min_lowfreq:
+        cutoff = min_lowfreq
+    else:
+        median = np.mean(df["count"])
+        deviation = np.std(df["count"])
+        cutoff = median + deviation_lowfreq * deviation
 
     candidates = list(df[df["count"] > cutoff]["sample"])
+    plt.axvline(cutoff, 0, max(df["count"]), color="red")
     plt.ylabel("Min variant count")
     plt.ylabel("Samples count")
 
@@ -398,9 +399,7 @@ if __name__ == '__main__':
     cmd.add_argument('-mc', '--min_coverage', default=0.8, type=float,
                      help='max %N to discard a position. Between 0.0-1.0 Default 0.8')
     cmd.add_argument('-mf', '--min_freq', default=0.2, type=float,
-                     help='minimun minority variant frequence. Between 0.0-1.0 Default 0.8')
-    cmd.add_argument('-ocut', '--outlayers_cutoff', default=0.2, type=float,
-                     help='minimum minority variant frequency. Between 0.0-1.0 Default 0.8')
+                     help='minimun minority variant frequency. Between 0.0-1.0 Default 0.8')
     cmd.add_argument('--vcf', required=True, help="Multi Sample VCF. GT and AD fields are mandatory")
     cmd.add_argument('--out', default="results/data.json", help="Output data")
     cmd.add_argument('-v', '--verbose', action='store_true')
@@ -408,6 +407,17 @@ if __name__ == '__main__':
     cmd = subparsers.add_parser('report', help='comparative analysis between samples')
     cmd.add_argument('--data', required=True,
                      help='JSON file created by "minor_freq_vars"')
+
+    cmd.add_argument('--min_lowfreq', default=None,
+                     help= 'Instead of using a standard deviation to classify a sample as a coinfection "candidate"'
+                     'we use the number of minority variants, as a hard limit. Should be used in a known set of samples '
+                           'or if the fact that all samples are candidates is known beforehand. '
+                           'If min_lowfreq is active, deviation_lowfreq value is ignored.'
+                          )
+    cmd.add_argument('--deviation_lowfreq', default=2,
+                     help='Coinfection candidates are determined if the number of minority variants are greater than'
+                          'N (this parameter) deviations from the mean. Default 2. If min_lowfreq is active, this parameter is ignored ' )
+
     cmd.add_argument('--out_dir', default="./results")
     cmd.add_argument('-v', '--verbose', action='store_true')
 
@@ -441,7 +451,7 @@ if __name__ == '__main__':
             sys.stderr.write(f"'{outfolder}' could not be created")
             sys.exit(1)
 
-        for bam_file in glob(args.bams_folder  + "/*.bam"):
+        for bam_file in glob(args.bams_folder + "/*.bam"):
             sample = bam_file.split("/")[-1].split(".bam")[0]
             e(f"samtools index  {bam_file}")
             cmd = f"""/gatk/gatk  HaplotypeCaller -ERC GVCF -R {args.reference} \
@@ -455,7 +465,7 @@ if __name__ == '__main__':
         variant_filter(args)
 
     if args.command == 'report':
-        candidates = comparative_analysis(args.data, args.out_dir)
+        candidates = comparative_analysis(args.data, args.out_dir, args.deviation_lowfreq, args.min_lowfreq)
         # --sequences_dir ./results/sequences/
 
     if args.command == 'minconsensus':
