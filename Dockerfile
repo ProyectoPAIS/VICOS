@@ -11,4 +11,16 @@ RUN wget -O gatk.zip "https://github.com/broadinstitute/gatk/releases/download/4
 RUN pip install numpy biopython pandas matplotlib
 ENV MPLCONFIGDIR=/tmp
 RUN ln /usr/bin/python3 /usr/bin/python
+
+
+
+RUN wget -O /opt/snpEff_latest_core.zip http://sourceforge.net/projects/snpeff/files/snpEff_latest_core.zip/download && \
+    cd /opt && unzip /opt/snpEff_latest_core.zip && rm -r clinEff snpEff_latest_core.zip
+RUN pip install tqdm
+COPY genes.gbk /opt/snpEff/data/covid19/genes.gbk
+
+RUN echo "covid19.genome : covid19" >> /opt/snpEff/snpEff.config
+RUN echo "  covid19.chromosomes : MN996528" >> /opt/snpEff/snpEff.config
+RUN cd /opt/snpEff && java -jar snpEff.jar build -genbank -v covid19
+
 COPY  minority_analysis.py /usr/local/bin/

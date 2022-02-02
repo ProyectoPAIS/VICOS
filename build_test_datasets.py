@@ -48,8 +48,8 @@ if __name__ == '__main__':
         p1 = float(proportion) / 100
         p2 = 1 - p1
         seed = random.randint(1,9999)
-        e(f"seqtk sample -s{seed} {args.fastq1_1} {p1} > {args.output_folder}/s{proportion}.R1.fq.gz ")
-        e(f"seqtk sample -s{seed} {args.fastq2_1} {p1} >> {args.output_folder}/s{proportion}.R1.fq.gz ")
+        e(f"seqtk sample -s{seed} {args.fastq1_1} {p1} | gzip > {args.output_folder}/s{proportion}.R1.fq.gz ")
+        e(f"seqtk sample -s{seed} {args.fastq2_1} {p2} | gzip >> {args.output_folder}/s{proportion}.R1.fq.gz ")
 
-        e(f"seqtk sample -s{seed} {args.fastq1_2} {p2} > {args.output_folder}/s{proportion}.R2.fq.gz ")
-        e(f"seqtk sample -s{seed} {args.fastq2_2} {p2} >> {args.output_folder}/s{proportion}.R2.fq.gz ")
+        e(f"seqtk sample -s{seed} {args.fastq1_2} {p1} | gzip > {args.output_folder}/s{proportion}.R2.fq.gz ")
+        e(f"seqtk sample -s{seed} {args.fastq2_2} {p2} | gzip >> {args.output_folder}/s{proportion}.R2.fq.gz ")
