@@ -142,7 +142,12 @@ def variant_filter(args, lineage_data={}):
                 if lineage_variant_key in lineage_data:
                     variant_lineages = lineage_data[lineage_variant_key]
 
+
                 pos = int(vec[1])
+
+                # if pos < 28000:
+                #     continue
+
                 ref = vec[3]
                 alts = {i: x for i, x in enumerate(vec[4].split(","))}
 
@@ -176,10 +181,10 @@ def variant_filter(args, lineage_data={}):
                     # dp = int(vec[9 + idx].split(":")[dp_index])
 
                     ad = vec[9 + idx].split(":")[ad_index]
-
+                    # (28280 == pos) and (gt.replace("|","/") in [("0/1")])
                     ads = [int(x) for x in ad.split(",") if x != "."]
                     if ads:
-                        min_ad = min(ads)
+                        min_ad = sorted(ads)[-2] # biggest second
                         gt_vec = [int(x) if x != "." else 99 for x in gt.replace("|", "/").split("/")]
 
                         pos_data[sample] = [{gt_options[gt_num]:
@@ -260,7 +265,7 @@ def variant_filter(args, lineage_data={}):
                 if len(gts) > 1:
                     depth = sum(ads.values())
                     freqs = [(k, 1 * v / depth) for k, v in sorted(ads.items(), key=lambda x: x[1])]
-                    min_variant = freqs[0]
+                    min_variant = freqs[-2]
                     dp = sum(ads.values())
                     if min_variant[1] >= args.min_freq:
                         if (dp >= args.min_allele_depth):
@@ -270,7 +275,7 @@ def variant_filter(args, lineage_data={}):
                             low_freq_mut = [pos, min_freqs]
                             variant_samples_pos[f'{pos}_{ref}_{min_variant[0]}'].append(sample)
                             valid_min_variant = True
-                            low_freq_freq.append(freqs[0][1])
+                            low_freq_freq.append(freqs[-2][1])
                             high_freq_freq.append(freqs[-1][1])
                         else:
                             discarded_low_depth[sample].append([pos, ads])
@@ -480,7 +485,7 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
     # variant_samples[f'{pos}_{allele}'].append(sample)
     with open(f'{output_dir}/candidates_summary.csv', "w") as h:
         columns = ["sample", "variants", "mean_freq", "mean_depth", "exclusive_consensus", "exclusive_min",
-                   "bad_quality", "lineages"]
+                   "bad_quality"] # , "lineages"
         h.write("\t".join(columns) + "\n")
 
         for sample_name, df in dfs.items():
@@ -489,7 +494,7 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
                 "mean_freq": round(df.freq_min.mean(), 2), "mean_depth": round(df.depth_min.mean(), 2),
                 "exclusive_consensus": len(df[df.exclusive_consensus]),
                 "exclusive_min": len(df[df.exclusive_min]),
-                "lineages": " ".join([f'{x[0]}|{x[1]}|{x[2]}' for x in data["sample_lineages"][sample_name]]),
+                #"lineages": " ".join([f'{x[0]}|{x[1]}|{x[2]}' for x in data["sample_lineages"][sample_name]]),
 
                 "bad_quality": data["badquality_samples"][sample_name]
                 if sample_name in data["badquality_samples"] else 0
