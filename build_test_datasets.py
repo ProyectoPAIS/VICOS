@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
     sample1_count = int(sp.check_output(f"zcat {args.fastq1_1}| wc -l",shell=True))/4
     sample2_count = int(sp.check_output(f"zcat {args.fastq2_1}| wc -l",shell=True))/4
-    total = sample1_count+sample2_count
+    total = sample1_count+sample2_count / 2
     if not os.path.exists(args.output_folder):
         os.makedirs(args.output_folder)
 
