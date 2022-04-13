@@ -416,6 +416,8 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
 
         median = np.mean(df["count"])
         deviation = np.std(df["count"])
+
+
         cutoff = median + deviation_lowfreq * deviation
         sys.stderr.write(
             f"deviation_lowfreq method to select candidates: mean {median:.2f} deviation {deviation:.2f} cutoff {cutoff:.2f}\n")

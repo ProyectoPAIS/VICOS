@@ -23,4 +23,6 @@ RUN echo "covid19.genome : covid19" >> /opt/snpEff/snpEff.config
 RUN echo "  covid19.chromosomes : MN996528" >> /opt/snpEff/snpEff.config
 RUN cd /opt/snpEff && java -jar snpEff.jar build -genbank -v covid19
 
+RUN pip install scipy
+
 COPY  minority_analysis.py /usr/local/bin/
