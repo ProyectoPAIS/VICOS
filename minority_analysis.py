@@ -516,8 +516,9 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
     plt.xlabel("Variants")
     plt.ylabel("Samples Count")
     plt.xticks(rotation=90)
-    plt.hist([len(v) for v in min_variant_samples.values()])
+    plt.barpolt([len(v) for v in min_variant_samples.values()])
     plt.savefig(f'{output_dir}/variants_hist.png')
+    plt.savefig(f'{output_dir}/variants_hist.eps',format="eps")
     plt.close()
 
     with open(f'{output_dir}/variants_list.csv', "w") as h:

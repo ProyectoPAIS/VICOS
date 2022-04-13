@@ -1,0 +1,7 @@
+Download lineaje data from https://outbreak.info/situation-reports
+- https://api.outbreak.info/genomics/lineage-mutations?pangolin_lineage=N.5
+- https://virological.org/t/outbreak-info-sars-cov-2-mutation-situation-reports/629/3
+
+Updated Lineaje list
+  https://raw.githubusercontent.com/cov-lineages/pango-designation/master/lineages.csv
+   --> Last column
