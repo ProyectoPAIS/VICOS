@@ -13,6 +13,11 @@ from tqdm import tqdm
 from itertools import groupby
 from Bio.SeqUtils import seq1
 
+import subprocess as sp
+from glob import glob
+import gzip
+from collections import defaultdict, Counter
+
 
 def e(cmd):
     if os.environ.get("verbose"):
@@ -142,7 +147,6 @@ def variant_filter(args, lineage_data={}):
                 if lineage_variant_key in lineage_data:
                     variant_lineages = lineage_data[lineage_variant_key]
 
-
                 pos = int(vec[1])
 
                 # if pos < 28000:
@@ -184,7 +188,7 @@ def variant_filter(args, lineage_data={}):
                     # (28280 == pos) and (gt.replace("|","/") in [("0/1")])
                     ads = [int(x) for x in ad.split(",") if x != "."]
                     if ads:
-                        min_ad = sorted(ads)[-2] # biggest second
+                        min_ad = sorted(ads)[-2]  # biggest second
                         gt_vec = [int(x) if x != "." else 99 for x in gt.replace("|", "/").split("/")]
 
                         pos_data[sample] = [{gt_options[gt_num]:
@@ -382,7 +386,7 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
     variant_samples = defaultdict(dict)
     min_variant_samples = defaultdict(list)
     ann_variants = {}
-
+    all_samples = list(data["entries_data"].items())[0][1].keys()
     for pos, sample_data in data["entries_data"].items():
         pos_data[pos] = {"consensus": defaultdict(list), "mins": defaultdict(list)}
 
@@ -407,6 +411,7 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
             pos_data[pos]["consensus"][consensus_variant[0]].append(1 - min_var_freq)
     min_per_sample = dict(min_per_sample)
 
+
     df = pd.DataFrame([{"sample": k, "count": len(v)} for k, v in min_per_sample.items()])
 
     if min_lowfreq:
@@ -414,24 +419,43 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
         cutoff = min_lowfreq
     else:
 
-        median = np.mean(df["count"])
-        deviation = np.std(df["count"])
+        # median = np.mean(df["count"])
+        # deviation = np.std(df["count"])
+        # cutoff = median + deviation_lowfreq * deviation
 
+        from scipy.stats import poisson
+        cutoff = poisson.ppf(0.95,np.mean(df["count"]))
 
-        cutoff = median + deviation_lowfreq * deviation
+        # sys.stderr.write(
+        #     f"deviation_lowfreq method to select candidates mean {median:.2f} deviation {deviation:.2f} cutoff {cutoff:.2f}\n")
         sys.stderr.write(
-            f"deviation_lowfreq method to select candidates: mean {median:.2f} deviation {deviation:.2f} cutoff {cutoff:.2f}\n")
+            f"deviation_lowfreq method to select candidates 95% percent of data cutoff: {cutoff:.2f} low freq variants   \n ")
 
     candidates = list(df[df["count"] > cutoff]["sample"])
 
+    sample_min_variants = {sample: [] for sample in all_samples}
+    for variant, samples in min_variant_samples.items():
+        for sample in samples:
+            sample_min_variants[sample].append(variant)
+
+    plt.figure(figsize=(15, 10))
     ax = plt.subplot()
     ax.axvline(cutoff, 0, max(df["count"]), color="red")
-    plt.xlabel("Low freq variants count")
-    plt.ylabel("Samples count")
+    plt.xlabel("Low freq variants count", fontsize=18)
+    plt.ylabel("Samples count", fontsize=18)
 
-    ax.hist(data=df, x="count", bins=30)
+    numbers, counts = list(zip( *Counter([len(x) for x in sample_min_variants.values() if x]).items()))
+    plt.bar(numbers, counts)
     ax.plot(df["count"], [0.01] * len(df["count"]), '|', color='k')
-    plt.savefig(f'{output_dir}/distplot.png')
+    plt.savefig(f'{output_dir}/min_variants_count_per_sample.png')
+    plt.savefig(f'{output_dir}/min_variants_count_per_sample.eps', format="eps")
+    plt.close()
+
+    numbers, counts = list(zip( *Counter([len(x) for x in sample_min_variants.values()]).items()))
+    plt.bar(numbers, counts)
+    ax.plot(df["count"], [0.01] * len(df["count"]), '|', color='k')
+    plt.savefig(f'{output_dir}/min_variants_count_per_sample_with_0.png')
+    plt.savefig(f'{output_dir}/min_variants_count_per_sample_with_0.eps', format="eps")
     plt.close()
 
     dfs = {}
@@ -487,7 +511,7 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
     # variant_samples[f'{pos}_{allele}'].append(sample)
     with open(f'{output_dir}/candidates_summary.csv', "w") as h:
         columns = ["sample", "variants", "mean_freq", "mean_depth", "exclusive_consensus", "exclusive_min",
-                   "bad_quality"] # , "lineages"
+                   "bad_quality"]  # , "lineages"
         h.write("\t".join(columns) + "\n")
 
         for sample_name, df in dfs.items():
@@ -496,7 +520,7 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
                 "mean_freq": round(df.freq_min.mean(), 2), "mean_depth": round(df.depth_min.mean(), 2),
                 "exclusive_consensus": len(df[df.exclusive_consensus]),
                 "exclusive_min": len(df[df.exclusive_min]),
-                #"lineages": " ".join([f'{x[0]}|{x[1]}|{x[2]}' for x in data["sample_lineages"][sample_name]]),
+                # "lineages": " ".join([f'{x[0]}|{x[1]}|{x[2]}' for x in data["sample_lineages"][sample_name]]),
 
                 "bad_quality": data["badquality_samples"][sample_name]
                 if sample_name in data["badquality_samples"] else 0
@@ -505,30 +529,37 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
             h.write(("\t".join([str(sample_summary[c]) for c in columns]) + "\n"))
 
     plt.figure(figsize=(15, 10))
-    plt.xlabel("Samples")
-    plt.ylabel("Min Variants Freqs")
+    plt.xlabel("Samples", fontsize=18)
+    plt.ylabel("Min Variants Freqs", fontsize=18)
     plt.xticks(rotation=90)
     plt.boxplot(x=[list(dfs[c].freq_min) for c in candidates], labels=candidates)
     plt.savefig(f'{output_dir}/candidates_freqs.png')
+    plt.savefig(f'{output_dir}/candidates_freqs.eps',format="eps")
+
     plt.close()
 
     print(f"Report Complete: {len(dfs)} candidate/s were processed")
 
-    plt.figure(figsize=(15, 10))
-    plt.xlabel("Variants")
-    plt.ylabel("Samples Count")
-    plt.xticks(rotation=90)
-    plt.barpolt([len(v) for v in min_variant_samples.values()])
-    plt.savefig(f'{output_dir}/variants_hist.png')
-    plt.savefig(f'{output_dir}/variants_hist.eps',format="eps")
-    plt.close()
+    # plt.figure(figsize=(15, 10))
+    # plt.xlabel("Variants", fontsize=18)
+    # plt.ylabel("Samples Count", fontsize=18)
+    # plt.xticks(rotation=90)
+
+
+
+
+    # numbers, counts = list(zip( *Counter([len(x) for x in sample_min_variants.values() if x  ]).items()))
+    # plt.bar(numbers, counts)
+    # plt.savefig(f'{output_dir}/samples_per_min_variant.png')
+    # plt.savefig(f'{output_dir}/samples_per_min_variant.eps', format="eps")
+    # plt.close()
 
     with open(f'{output_dir}/variants_list.csv', "w") as h:
-        columns = ["variant", "ann" ,"consensus", "lowfreq", "in_candidate", "candidate_list"]
+        columns = ["variant", "ann", "consensus", "lowfreq", "in_candidate", "candidate_list"]
         h.write("\t".join(columns) + "\n")
         for var_str, samples in sorted(variant_samples.items(), key=lambda x: int(x[0].split("_")[0])):
             in_candidates = set(samples) & set(candidates)
-            row = {"variant": var_str,"ann":ann_variants[var_str] if var_str in ann_variants else "",
+            row = {"variant": var_str, "ann": ann_variants[var_str] if var_str in ann_variants else "",
                    "consensus": len([k for k, v in samples.items() if v == 1]),
                    "lowfreq": len([k for k, v in samples.items() if v != 1]),
                    "in_candidate": len(in_candidates),
@@ -561,22 +592,19 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
                 else:
                     vcandidates.append(sample)
         if not_candidate_sample_variant and min_var_mut:
-            not_candidate_sample_variants.append({"pos": pos, "key": min_var_mut,  "depths": depths,
+            not_candidate_sample_variants.append({"pos": pos, "key": min_var_mut,
+                                                  "depths": depths,
                                                   "freq": freqs, "candidates": vcandidates,
                                                   "non_candidates": vnoncandidates
                                                      , "gene": gene, "gene_nt": gene_nt, "gene_aa": gene_aa})
 
-    pd.DataFrame(not_candidate_sample_variants).to_csv(f'{output_dir}/non_candidate_variants_list.csv')
+    pd.DataFrame(not_candidate_sample_variants).to_csv(f'{output_dir}/non_candidate_variants_list.csv',index=False)
 
     return candidates
 
 
 if __name__ == '__main__':
     import argparse
-    import subprocess as sp
-    from glob import glob
-    import gzip
-    from collections import defaultdict
 
     parser = argparse.ArgumentParser(description='Process minory variants')
 
@@ -690,6 +718,8 @@ if __name__ == '__main__':
         variant_filter(args, lineage_data)
 
     if args.command == 'report':
+        if not os.path.exists(args.out_dir):
+            os.makedirs(args.out_dir)
         assert os.path.exists(args.out_dir), f'"{args.out_dir}" could not be created'
         candidates = comparative_analysis(args.data, args.out_dir, args.deviation_lowfreq, args.min_lowfreq,
                                           min_depth=args.min_allele_depth)
