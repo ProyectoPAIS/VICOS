@@ -73,6 +73,9 @@ def download(args):
     cmdx = f"""samtools faidx {outfolder}/MN996528.fna"""
     e(cmdx)
 
+    cmdx = f"""bwa index {outfolder}/MN996528.fna"""
+    e(cmdx)
+
 
 def variant_filter(args, lineage_data={}):
     """MN996528.1	1879	.	A	G	14552.79	.	AC=2;AF=5.556e-03;AN=360;BaseQRankSum=2.16;DP=113297;ExcessHet=0.0061;FS=0.838;InbreedingCoeff=0.8880;MLEAC=2;MLEAF=5.556e-03;MQ=59.99;MQRankSum=0.00;QD=28.76;ReadPosRankSum=1.03;SOR=0.597	GT:AD:DP:GQ:PGT:PID:PL:PS	0/0:717,0:717:99:.:.:0,120,1800	0/0:166,0:166:99:.:.:0,120,1800	0/0:395,0:395:99:.:.:0,120,1800	0/0:354,0:354:99:.:.:0,120,1800	0/0:464,0:464:99:.:.:0,120,1800	0/0:363,0:363:99:.:.:0,120,1800	0/0:464,0:464:99:.:.:0,120,1800	0/0:396,0:396:99:.:.:0,120,1800	0/0:288,0:288:99:.:.:0,120,1800	0/0:371,0:371:99:.:.:0,120,1800	0/0:347,0:347:99:.:.:0,120,1800	0/0:422,0:422:99:.:.:0,120,1800	0/0:517,0:517:99:.:.:0,120,1800	0/0:392,0:392:99:.:.:0,120,1800	0/0:392,0:392:99:.:.:0,120,1800	0/0:465,0:465:99:.:.:0,120,1800
@@ -140,7 +143,7 @@ def variant_filter(args, lineage_data={}):
                     if "/" not in gene_aa:
                         gene_aa = gene_aa + "/" + gene_aa
                     gene_aa = "DEL" + gene_aa
-                if ("stop_gained" in ann[1]) or ("missense_variant" in ann[1]):
+                if ("stop_gained" in ann[1]) or ("missense_variant" in ann[1]) or ("synonymous_variant" in ann[1]):
                     gene_aa = seq1(gene_aa[:3]) + "".join([x for x in gene_aa[3:] if x.isdigit()]) + seq1(
                         "".join([x for x in gene_aa[3:] if not x.isdigit()]))
 
@@ -544,16 +547,6 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
 
     print(f"Report Complete: {len(dfs)} candidate/s were processed")
 
-    # plt.figure(figsize=(15, 10))
-    # plt.xlabel("Variants", fontsize=18)
-    # plt.ylabel("Samples Count", fontsize=18)
-    # plt.xticks(rotation=90)
-
-    # numbers, counts = list(zip( *Counter([len(x) for x in sample_min_variants.values() if x  ]).items()))
-    # plt.bar(numbers, counts)
-    # plt.savefig(f'{output_dir}/samples_per_min_variant.png')
-    # plt.savefig(f'{output_dir}/samples_per_min_variant.eps', format="eps")
-    # plt.close()
 
     with open(f'{output_dir}/variants_list.csv', "w") as h:
         columns = ["variant", "ann", "consensus", "lowfreq", "in_candidate", "candidate_list"]
@@ -687,7 +680,7 @@ if __name__ == '__main__':
     if args.command == 'bam2vcf':
 
         if not os.path.exists(args.reference):
-            sys.stderr.write(f"'{args.reference}' does not exists")
+            sys.stderr.write(f"'{args.reference}' does not exists. Check -ref param and/or ude 'download' subcommand")
             sys.exit(1)
 
         outfolder = args.output

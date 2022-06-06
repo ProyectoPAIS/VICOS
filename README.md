@@ -8,7 +8,7 @@ The whole pipeline runs using Docker (https://docs.docker.com/engine/install/), 
 
 To run the pipeline from begining to end:
 ```shell script
-docker run -u $(id -u ${USER}):$(id -g ${USER}) --rm -w /out -v $PWD:/out sndg/covminanalysis minority_analysis.py -i ./bams_folder -o ./output
+docker run -u $(id -u ${USER}):$(id -g ${USER}) --rm -w /out -v $PWD:/out sndg/covminanalysis minority_analysis.py complete -i ./bams_folder -o ./output
 ```
 This assumes that: 
 - All bam files are in bams_folder and that folder is INSIDE the current directory
