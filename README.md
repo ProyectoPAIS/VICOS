@@ -1,4 +1,4 @@
-# SARS-CoV-2 co-infections
+# VICOS
 
 ## Software
 
