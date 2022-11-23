@@ -614,60 +614,62 @@ if __name__ == '__main__':
     cmd.add_argument('-v', '--verbose', action='store_true')
 
     cmd = subparsers.add_parser('merge_vcfs', help='joins all haplotype calls in one gvcf')
-    cmd.add_argument('-vcfs', '--vcfs_dir', required=True, help="directory were bam files are located")
+    cmd.add_argument('-vcfs', '--vcfs_dir', required=True, help="directory were raw vcf files are located")
     cmd.add_argument('-ref', '--reference', default="data/MN996528.fna",
                      help='fasta file. Can be gziped. Default "data/MN996528.fna"')
     cmd.add_argument('-o', '--output',
                      default='results/variants.vcf.gz', help='output file. Default "results/variants.vcf.gz"')
     cmd.add_argument('-v', '--verbose', action='store_true')
 
-    cmd = subparsers.add_parser('minor_freq_vars', help='gets a list of minor freq variants')
-    cmd.add_argument('-mad', '--min_allele_depth', default=10, type=int,
-                     help='Minimun allele read depth. Default 10')
-    cmd.add_argument('-mc', '--min_coverage', default=0.8, type=float,
+    cmd = subparsers.add_parser('iSNVs', help='gets a list of iSNVs')
+    cmd.add_argument( '--isnv_depth', default=10, type=int,
+                     help='Min iSNVs read depth. Default 10')
+    cmd.add_argument( '--min_coverage', default=0.8, type=float,
                      help='max percentaje N to discard a position. Between 0.0-1.0 Default 0.8'
                      )
-    cmd.add_argument('-mf', '--min_freq', default=0.2, type=float,
-                     help='minimun minority variant frequency. Between 0.0-1.0 Default 0.8')
+    cmd.add_argument( '--isnv_freq', default=0.2, type=float,
+                     help='min iSNVs frequency. Between 0.0-1.0 Default 0.8')
 
     cmd.add_argument('--badq_strain_ns_threshold', default=1000, type=int,
                      help='sets the threshold (Ns) to tag a sample as a bad quality one')
 
-    cmd.add_argument('--lineage_json', default='data/lineage_variants.json',
-                     help='JSON file created from outbreak.info API')
     cmd.add_argument('--vcf', required=True, help="Multi Sample VCF. GT and AD fields are mandatory")
     cmd.add_argument('--out', default="results/data.json", help="Output data")
     cmd.add_argument('-v', '--verbose', action='store_true')
 
-    cmd = subparsers.add_parser('report', help='comparative analysis between samples')
+    cmd = subparsers.add_parser('candidates', help='extract candidates from the dataset')
     cmd.add_argument('--data', required=True,
-                     help='JSON file created by "minor_freq_vars"')
-
-    cmd.add_argument('--min_lowfreq', default=None, type=int,
+                     help='JSON file created by "iSNVs" step')
+# min_lowfreq isnv_freq_cutoff
+# deviation_lowfreq deviation_isnv_freq_cutoff
+# min_allele_depth isnv_depth
+    cmd.add_argument('--isnv_freq_cutoff', default=None, type=int,
                      help='Instead of using a standard deviation to classify a sample as a coinfection "candidate"'
-                          'we use the number of minority variants, as a hard limit. Should be used in a known set of samples '
+                          'we use the number of minority variants, as a hard limit. '
+                          'Should be used in a known set of samples '
                           'or if the fact that all samples are candidates is known beforehand. '
-                          'If min_lowfreq is active, deviation_lowfreq value is ignored.'
+                          'If isnv_freq_cutoff is active, deviation_lowfreq value is ignored.'
                      )
-    cmd.add_argument('--deviation_lowfreq', default=1,
+    cmd.add_argument('--deviation_isnv_freq_cutoff', default=1,
                      help='Coinfection candidates are determined if the number of minority variants are greater than'
-                          'N (this parameter) deviations from the mean. Default 1. If min_lowfreq is active, this parameter is ignored '
+                          'N (this parameter) deviations from the mean. '
+                          'Default 1. If min_lowfreq is active, this parameter is ignored '
                      )
 
-    cmd.add_argument('-mad', '--min_allele_depth', default=10, type=int,
+    cmd.add_argument( '--isnv_depth', default=10, type=int,
                      help='Minimun allele read depth. Default 10')
 
     cmd.add_argument('--out_dir', default="./results")
     cmd.add_argument('-v', '--verbose', action='store_true')
 
-    cmd = subparsers.add_parser('minconsensus', help='creates sequences using minor frequency variants')
-    cmd.add_argument('--data', required=True,
-                     help='JSON file created by minor_freq_vars')
-    cmd.add_argument('--vcf', required=True, help="Multi Sample VCF. GT and AD fields are mandatory")
-    cmd.add_argument('--out_dir', default="./results")
-    cmd.add_argument('-ref', '--reference', default="data/MN996528.fna",
-                     help='fasta file. Can be gziped. Default "data/MN996528.fna"')
-    cmd.add_argument('-v', '--verbose', action='store_true')
+    # cmd = subparsers.add_parser('minconsensus', help='creates sequences using minor frequency variants')
+    # cmd.add_argument('--data', required=True,
+    #                  help='JSON file created by minor_freq_vars')
+    # cmd.add_argument('--vcf', required=True, help="Multi Sample VCF. GT and AD fields are mandatory")
+    # cmd.add_argument('--out_dir', default="./results")
+    # cmd.add_argument('-ref', '--reference', default="data/MN996528.fna",
+    #                  help='fasta file. Can be gziped. Default "data/MN996528.fna"')
+    # cmd.add_argument('-v', '--verbose', action='store_true')
 
     args = parser.parse_args()
 
@@ -677,7 +679,7 @@ if __name__ == '__main__':
     if args.command == 'download':
         download(args)
 
-    if args.command == 'bam2vcf':
+    elif args.command == 'bam2vcf':
 
         if not os.path.exists(args.reference):
             sys.stderr.write(f"'{args.reference}' does not exists. Check -ref param and/or ude 'download' subcommand")
@@ -697,10 +699,10 @@ if __name__ == '__main__':
                 -ploidy 2 -I {bam_file} --output-mode EMIT_ALL_CONFIDENT_SITES -O {args.output}/{sample}.g.vcf.gz"""
             e(cmd)
 
-    if args.command == 'merge_vcfs':
+    elif args.command == 'merge_vcfs':
         merge_vcfs(args)
 
-    if args.command == 'minor_freq_vars':
+    elif args.command == 'minor_freq_vars':
         if os.path.exists(args.lineage_json):
             with open(args.lineage_json) as h:
                 lineage_data = json.load(h)
@@ -709,15 +711,14 @@ if __name__ == '__main__':
             lineage_data = {}
         variant_filter(args, lineage_data)
 
-    if args.command == 'report':
+    elif args.command == 'report':
         if not os.path.exists(args.out_dir):
             os.makedirs(args.out_dir)
         assert os.path.exists(args.out_dir), f'"{args.out_dir}" could not be created'
         candidates = comparative_analysis(args.data, args.out_dir, args.deviation_lowfreq, args.min_lowfreq,
                                           min_depth=args.min_allele_depth)
-        # --sequences_dir ./results/sequences/
 
-    if args.command == 'minconsensus':
-        with open("data/combined.vcf") as h, open("./min_seqs.fasta", "w") as output:
-            aln(h, output, refseq=str(bpio.read("data/MN996528.fna", "fasta").seq),
-                included_samples=candidates)
+    else:
+        sys.stderr.write(f"Invalid command: {args.command}")
+        sys.exit(1)
+

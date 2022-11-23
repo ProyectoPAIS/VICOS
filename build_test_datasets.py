@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
     sample1_count = int(sp.check_output(f"zcat {args.fastq1_1}| wc -l",shell=True))/4
     sample2_count = int(sp.check_output(f"zcat {args.fastq2_1}| wc -l",shell=True))/4
-    total = sample1_count+sample2_count / 2
+    total = (sample1_count+sample2_count) / 2
     if not os.path.exists(args.output_folder):
         os.makedirs(args.output_folder)
 
@@ -51,7 +51,8 @@ if __name__ == '__main__':
         p1 = float(proportion) / 100
         p2 = 1 - p1
         seed = random.randint(1,9999)
-
+        with open(f'{args.output_folder}/seed',"w") as h:
+            h.write(str(seed))
         e(f"seqtk sample -s{seed} {args.fastq1_1} {p1 * total} | gzip > {args.output_folder}/s{proportion}.R1.fq.gz ")
         e(f"seqtk sample -s{seed} {args.fastq2_1} {p2 * total} | gzip >> {args.output_folder}/s{proportion}.R1.fq.gz ")
 

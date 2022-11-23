@@ -1,3 +1,6 @@
 *.iml
 data/
 README.local
+__pycache__/
+.idea
+.ipynb_checkpoints/
