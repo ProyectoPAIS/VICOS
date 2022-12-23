@@ -26,3 +26,8 @@ RUN cd /opt/snpEff && java -jar snpEff.jar build -genbank -v covid19
 RUN pip install scipy
 
 COPY  minority_analysis.py /usr/local/bin/
+COPY  vcffixer.py /usr/local/bin/
+RUN useradd -m  -s /bin/bash vicos
+USER vicos:vicos
+CMD minority_analysis.py
+

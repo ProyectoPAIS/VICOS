@@ -77,17 +77,17 @@ def download(args):
     e(cmdx)
 
 
-def variant_filter(args, lineage_data={}):
+def variant_filter(vcf_path, outpath, min_allele_depth,min_coverage,min_freq,badq_strain_ns_threshold, lineage_data={}):
     """MN996528.1	1879	.	A	G	14552.79	.	AC=2;AF=5.556e-03;AN=360;BaseQRankSum=2.16;DP=113297;ExcessHet=0.0061;FS=0.838;InbreedingCoeff=0.8880;MLEAC=2;MLEAF=5.556e-03;MQ=59.99;MQRankSum=0.00;QD=28.76;ReadPosRankSum=1.03;SOR=0.597	GT:AD:DP:GQ:PGT:PID:PL:PS	0/0:717,0:717:99:.:.:0,120,1800	0/0:166,0:166:99:.:.:0,120,1800	0/0:395,0:395:99:.:.:0,120,1800	0/0:354,0:354:99:.:.:0,120,1800	0/0:464,0:464:99:.:.:0,120,1800	0/0:363,0:363:99:.:.:0,120,1800	0/0:464,0:464:99:.:.:0,120,1800	0/0:396,0:396:99:.:.:0,120,1800	0/0:288,0:288:99:.:.:0,120,1800	0/0:371,0:371:99:.:.:0,120,1800	0/0:347,0:347:99:.:.:0,120,1800	0/0:422,0:422:99:.:.:0,120,1800	0/0:517,0:517:99:.:.:0,120,1800	0/0:392,0:392:99:.:.:0,120,1800	0/0:392,0:392:99:.:.:0,120,1800	0/0:465,0:465:99:.:.:0,120,1800
         """
-    if not os.path.exists(args.vcf):
-        sys.stderr.write(f"'{args.vcf}' does not exists\n")
+    if not os.path.exists(vcf_path):
+        sys.stderr.write(f"'{vcf_path}' does not exists\n")
         sys.exit(1)
 
     print(f"Running lowfreq variant detection with:")
-    print(f'- Minimun allele read depth: {args.min_allele_depth}')
-    print(f'- max %N to discard a position: {args.min_coverage}')
-    print(f'- minimun minority variant frequency: {args.min_freq}')
+    print(f'- Minimun allele read depth: {min_allele_depth}')
+    print(f'- max %N to discard a position: {min_coverage}')
+    print(f'- minimun minority variant frequency: {min_freq}')
     print("----------------")
 
     lineage_variants_count = defaultdict(lambda: 0)
@@ -101,7 +101,7 @@ def variant_filter(args, lineage_data={}):
                 lineage_data[var] = [(x, y) for x, y in lin_freqs if x != k]
     lineage_variants_count = {k: v for k, v in lineage_variants_count.items() if v >= 8}
 
-    h = gzip.open(args.vcf, "rt") if args.vcf.endswith(".gz") else open(args.vcf)
+    h = gzip.open(vcf_path, "rt") if vcf_path.endswith(".gz") else open(vcf_path)
     number_of_variable_sites = 0
     number_of_mutations = 0
     ns_per_sample = defaultdict(lambda: 0)
@@ -195,13 +195,13 @@ def variant_filter(args, lineage_data={}):
 
                         pos_data[sample] = [{gt_options[gt_num]:
                                                  ([int(x) for x in ad.split(",")[gt_num]] if gt_num != 99 and (
-                                                         min_ad >= args.min_allele_depth) else "?")
+                                                         min_ad >= min_allele_depth) else "?")
                                              for gt_num in gt_vec},
                                             {gt_options[i]: int(ad_num) for i, ad_num in enumerate(ad.split(","))}, ref,
                                             (gene, gene_nt, gene_aa)
                                             ]
 
-                        if ads and min_ad >= args.min_allele_depth and len(set(gt.replace("|", "/").split("/"))) > 1:
+                        if ads and min_ad >= min_allele_depth and len(set(gt.replace("|", "/").split("/"))) > 1:
                             low_freq = True
 
                         if variant_lineages:
@@ -229,7 +229,7 @@ def variant_filter(args, lineage_data={}):
         sample_lineages2[sample] = [y for y in sample_lineages2[sample] if
                                     round(y[1] * 1.0 / lineage_variants_count[y[0]], 2) > 0.8]
 
-    badqualitysamples = {s: v for s, v in ns_per_sample.items() if v > args.badq_strain_ns_threshold}
+    badqualitysamples = {s: v for s, v in ns_per_sample.items() if v > badq_strain_ns_threshold}
     print(f"Number of samples: {len(samples)}")
     print(f'Number of bad quality samples: {len(badqualitysamples)}')
     print(f'number of variable sites: {number_of_variable_sites}')
@@ -248,7 +248,7 @@ def variant_filter(args, lineage_data={}):
             is_n = (1 if "N" in gts else 0)
             ns += is_n
 
-        if (1 - (1.0 * ns / len(samples))) < args.min_coverage:
+        if (1 - (1.0 * ns / len(samples))) < min_coverage:
             excluded_positions.append(pos)
             #     if not is_n:
             #         low_freq_muts.append(low_freq_mut)
@@ -275,8 +275,8 @@ def variant_filter(args, lineage_data={}):
                     min_variant = freqs[-2]
                     dp = sum(ads.values())
                     minor_allele_depth = [v for k, v in sorted(ads.items(), key=lambda x: x[1], reverse=True)][1]
-                    if min_variant[1] >= args.min_freq and minor_allele_depth >= args.min_allele_depth:
-                        if (dp >= args.min_allele_depth):
+                    if min_variant[1] >= min_freq and minor_allele_depth >= min_allele_depth:
+                        if (dp >= min_allele_depth):
                             min_freqs.append(min_variant[1])
                             consensus_variant = freqs[-1]
                             consensus_freqs.append(min_variant[1])
@@ -288,7 +288,7 @@ def variant_filter(args, lineage_data={}):
                         else:
                             discarded_low_depth[sample].append([pos, ads])
                     else:
-                        consensus_variant = list(gts.items())[0][0]
+                        consensus_variant = sorted(ads.items(), key=lambda x: x[1])[-1][0]
                         min_variant = [""]
                         high_freq_freq.append(freqs[-1][1])
                 else:
@@ -314,7 +314,7 @@ def variant_filter(args, lineage_data={}):
     variant_samples = dict(variant_samples)
     entries_data = dict(entries_data)
 
-    with open(f"{args.out}", "w") as h:
+    with open(f"{outpath}", "w") as h:
         data = {"variant_samples": variant_samples, "entries_data": entries_data,
                 "discarded_low_depth": discarded_low_depth,
                 "excluded_positions": excluded_positions, "low_freq_freq": low_freq_freq,
@@ -379,7 +379,7 @@ def aln(h, output, refseq=None, included_samples=None):
         h.close()
 
 
-def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq=None, min_depth=10):
+def comparative_analysis(json_file, output_dir, min_lowfreq=None,percent_dev=0.95, min_depth=10):
     assert os.path.exists(json_file), f'"{json_file}" does not exists'
     with open(json_file) as h:
         data = json.load(h)
@@ -389,18 +389,32 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
 
     variant_samples = defaultdict(dict)
     min_variant_samples = defaultdict(list)
+    consensus_variant_samples = defaultdict(list)
+    discarded_variant_samples = defaultdict(list)
     ann_variants = {}
     all_samples = list(data["entries_data"].items())[0][1].keys()
     for pos, sample_data in data["entries_data"].items():
         pos_data[pos] = {"consensus": defaultdict(list), "mins": defaultdict(list)}
 
         for sample, (
-                consensus_variant, min_variant, gts, ads, ref, (gene, gene_nt, gene_aa),
+                consensus_variant_raw, min_variant, gts, ads, ref, (gene, gene_nt, gene_aa),
                 lineages) in sample_data.items():
             min_var_freq = 0
+            consensus_variant = consensus_variant_raw[0] if len(min_variant) > 1 else consensus_variant_raw
+            ads_filtered = {k:v for k,v in ads.items() if v >= min_depth}
             for allele in ads.keys():
                 if (allele in gts) and ads[allele]:
-                    variant_samples[f'{pos}_{ref}_{allele}'][sample] = len(gts)
+                    var_str = f'{pos}_{ref}_{allele}'
+                    #ads_filtered = {k:v for k,v in ads.items() if v > min_depth}
+                    if ads_filtered and (allele in ads_filtered):
+                        if allele and (allele in [consensus_variant,min_variant[0]]):
+                            variant_samples[var_str][sample] = ads_filtered
+                        else:
+                            discarded_variant_samples[var_str].append(sample)
+
+
+            if ads_filtered and consensus_variant in ads_filtered:
+                consensus_variant_samples[f'{pos}_{ref}_{consensus_variant}'].append(sample)
 
             if min_variant and min_variant[0] and (ads[min_variant[0]] >= min_depth):
                 min_var_mut = f'{pos}_{ref}_{min_variant[0]}'
@@ -412,7 +426,7 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
 
                 pos_data[pos]["mins"][min_var_mut].append(min_var_freq)
 
-            pos_data[pos]["consensus"][consensus_variant[0]].append(1 - min_var_freq)
+            pos_data[pos]["consensus"][consensus_variant].append(1 - min_var_freq)
     min_per_sample = dict(min_per_sample)
 
     df = pd.DataFrame([{"sample": k, "count": len(v)} for k, v in min_per_sample.items()])
@@ -427,7 +441,7 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
         # cutoff = median + deviation_lowfreq * deviation
 
         from scipy.stats import poisson
-        cutoff = poisson.ppf(0.95, np.mean(df["count"]))
+        cutoff = poisson.ppf(percent_dev, np.mean(df["count"]))
 
         # sys.stderr.write(
         #     f"deviation_lowfreq method to select candidates mean {median:.2f} deviation {deviation:.2f} cutoff {cutoff:.2f}\n")
@@ -549,13 +563,21 @@ def comparative_analysis(json_file, output_dir, deviation_lowfreq=1, min_lowfreq
 
 
     with open(f'{output_dir}/variants_list.csv', "w") as h:
-        columns = ["variant", "ann", "consensus", "lowfreq", "in_candidate", "candidate_list"]
+        columns = ["variant", "ann", "consensus","discarded", "lowfreq", "in_candidate", "candidate_list"]
         h.write("\t".join(columns) + "\n")
         for var_str, samples in sorted(variant_samples.items(), key=lambda x: int(x[0].split("_")[0])):
-            in_candidates = set(samples) & set(candidates)
+            allele = var_str.split("_")[2]
+            filtered_samples = [sample for sample,ads in samples.items() if ads.get(allele,0) >= min_depth ]
+            in_candidates = set(filtered_samples)  & set(candidates)
+            consensus = set(consensus_variant_samples[var_str]) #& set(candidates)
+            lowfreq =  min_variant_samples [var_str]
+            if len(filtered_samples) != (len(consensus) + len(lowfreq)):
+                print("NO!!!!!!!!!!!!!!!!!!!!")
             row = {"variant": var_str, "ann": ann_variants[var_str] if var_str in ann_variants else "",
-                   "consensus": len([k for k, v in samples.items() if v == 1]),
-                   "lowfreq": len([k for k, v in samples.items() if v != 1]),
+                   "consensus": len(consensus),
+                   "discarded": len(discarded_variant_samples[var_str]),
+                   #"lowfreq": len([k for k, v in samples.items() if v != 1]),
+                   "lowfreq": len(lowfreq) , #min_variant_samples
                    "in_candidate": len(in_candidates),
                    "candidate_list": ",".join(in_candidates)}
             h.write(("\t".join([str(row[c]) for c in columns]) + "\n"))
@@ -643,17 +665,17 @@ if __name__ == '__main__':
 # min_lowfreq isnv_freq_cutoff
 # deviation_lowfreq deviation_isnv_freq_cutoff
 # min_allele_depth isnv_depth
-    cmd.add_argument('--isnv_freq_cutoff', default=None, type=int,
+    cmd.add_argument('--isnv_freq_cutoff', default=None, type=float,
                      help='Instead of using a standard deviation to classify a sample as a coinfection "candidate"'
                           'we use the number of minority variants, as a hard limit. '
                           'Should be used in a known set of samples '
                           'or if the fact that all samples are candidates is known beforehand. '
                           'If isnv_freq_cutoff is active, deviation_lowfreq value is ignored.'
                      )
-    cmd.add_argument('--deviation_isnv_freq_cutoff', default=1,
+    cmd.add_argument('--deviation_isnv_freq_cutoff', default=0.95,
                      help='Coinfection candidates are determined if the number of minority variants are greater than'
                           'N (this parameter) deviations from the mean. '
-                          'Default 1. If min_lowfreq is active, this parameter is ignored '
+                          'Default 0.95. If isnv_freq_cutoff is active, this parameter is ignored '
                      )
 
     cmd.add_argument( '--isnv_depth', default=10, type=int,
@@ -702,21 +724,26 @@ if __name__ == '__main__':
     elif args.command == 'merge_vcfs':
         merge_vcfs(args)
 
-    elif args.command == 'minor_freq_vars':
-        if os.path.exists(args.lineage_json):
-            with open(args.lineage_json) as h:
-                lineage_data = json.load(h)
+    elif args.command == 'iSNVs':
+        # if os.path.exists(args.lineage_json):
+        #     with open(args.lineage_json) as h:
+        #         lineage_data = json.load(h)
+        #
+        # else:
+        #     lineage_data = {}
+        variant_filter(vcf_path=args.vcf, outpath=args.out, min_allele_depth=args.isnv_depth,
+                       min_coverage=args.min_coverage,min_freq=args.isnv_freq,
+                       badq_strain_ns_threshold=args.badq_strain_ns_threshold)
 
-        else:
-            lineage_data = {}
-        variant_filter(args, lineage_data)
-
-    elif args.command == 'report':
+    elif args.command == 'candidates':
         if not os.path.exists(args.out_dir):
             os.makedirs(args.out_dir)
         assert os.path.exists(args.out_dir), f'"{args.out_dir}" could not be created'
-        candidates = comparative_analysis(args.data, args.out_dir, args.deviation_lowfreq, args.min_lowfreq,
-                                          min_depth=args.min_allele_depth)
+        # comparative_analysis(json_file, output_dir, min_lowfreq=None, min_depth=10):
+
+        candidates = comparative_analysis(args.data, args.out_dir, args.isnv_freq_cutoff,
+                                          args.deviation_isnv_freq_cutoff,
+                                          min_depth=args.isnv_depth)
 
     else:
         sys.stderr.write(f"Invalid command: {args.command}")
